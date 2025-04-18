@@ -1,0 +1,9 @@
+names:
+- anthracnose
+- cssvd
+- healthy
+nc: 3
+path: /data/home/eak/learning/nganga_ai/AminiCocoa/Amini-Cocoa-Contamination-Challenge/dataset
+test: /data/home/eak/learning/nganga_ai/AminiCocoa/Amini-Cocoa-Contamination-Challenge/dataset/images/test
+train: /data/home/eak/learning/nganga_ai/AminiCocoa/Amini-Cocoa-Contamination-Challenge/dataset/images/train
+val: /data/home/eak/learning/nganga_ai/AminiCocoa/Amini-Cocoa-Contamination-Challenge/dataset/images/val
