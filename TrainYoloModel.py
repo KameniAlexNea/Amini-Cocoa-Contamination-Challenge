@@ -1,22 +1,19 @@
 # Import libraries
+import os
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 import pandas as pd
 import os
 from pathlib import Path
-import matplotlib.pyplot as plt
-from ultralytics import YOLO
-import torch
 
+from ultralytics import YOLO
 
 # INPUT_DIRS
 INPUT_DATA_DIR = Path("dataset")
 
-
-os.listdir(INPUT_DATA_DIR)
-
-
 ## Drop the Folder if it already exists
 DATASETS_DIR = Path("dataset")
-DATASETS_DIR
 
 
 # Image & labels directory
@@ -27,34 +24,14 @@ VAL_IMAGES_DIR = DATASETS_DIR / "images" / "val"
 VAL_LABELS_DIR = DATASETS_DIR / "labels" / "val"
 
 
-TRAIN_IMAGES_DIR.absolute()
-
-
 # Load train and test files
 train = pd.read_csv(INPUT_DATA_DIR / "Train_df.csv")
 val = pd.read_csv(INPUT_DATA_DIR / "Val_df.csv")
 test = pd.read_csv(INPUT_DATA_DIR / "Test.csv")
 ss = pd.read_csv(INPUT_DATA_DIR / "SampleSubmission.csv")
 
-
-## Sample submission file
-ss.head()
-
-
-train.head()
-
-
-train["class"].unique()
-
-
-train["class_id"].unique()
-
-
-train[["class", "class_id"]].value_counts()
-
-
 class_map = {cls: i for i, cls in enumerate(sorted(train["class"].unique().tolist()))}
-class_map
+
 
 
 # Strip any spacing from the class item and make sure that it is a str
@@ -71,8 +48,6 @@ train[["class", "class_id"]].value_counts()
 train["ImagePath"].nunique()
 
 
-ss.head()
-
 
 import logging
 
@@ -83,8 +58,8 @@ logging.basicConfig(
 
 # Load a yolo pretrained model
 # Load a yolo pretrained model
-model = YOLO("yolo11n.pt")
-# model = YOLO("runs/detect/train3/weights/best.pt")
+model = YOLO("yolo8n.pt")
+# model = YOLO("runs/detect/train4/weights/best.pt")
 
 # Fine tune model to our data
 model.train(
@@ -99,17 +74,18 @@ model.train(
     device="cuda",  # Use the first GPU
     multi_scale=True,
     # cos_lr=True,
-    # dropout=0.1,
-    # degrees=145,
-    # shear=45,
-    # flipud=0.3,
-    # fliplr=0.3,
-    # mixup=0.1,
+    box=9,
+    dropout=0.1,
+    mixup=0.1,
     max_det=30,
-    # nms=True,
+    nms=True,
     workers=4,
-    # iou=.5,
-    # cls=2.5
+    flipud=0.3,
+    cls=1.0,
+    augment=True,
+    copy_paste=0.1,
+    copy_paste_mode="mixup",
+    auto_augment="augmix",
 )
 
 from glob import glob
