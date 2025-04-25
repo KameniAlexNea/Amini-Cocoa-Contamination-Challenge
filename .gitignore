@@ -178,3 +178,6 @@ runs
 models
 *.pt
 *.out
+
+wandb
+logs

@@ -1,9 +1,9 @@
 nohup python object-detection-detr/train.py \
     --cls_thr 0.1 \
     --num_class 3 \
-    --validation_csv "dataset/valid.json" \
+    --validation_csv "dataset/full_valid.json" \
     --image_folder "." \
-    --training_csv "dataset/train.json" \
+    --training_csv "dataset/full_train.json" \
     --output_dir logs \
     --run_name cond-detr-50 \
     --auto_find_batch_size \
@@ -30,6 +30,6 @@ nohup python object-detection-detr/train.py \
     --metric_for_best_model loss \
     --load_best_model_at_end \
     --overwrite_output_dir \
-    --dataloader_num_workers 4 \
+    --dataloader_num_workers 8 \
     --gradient_accumulation_steps 1 \
     &> nohup.out &
