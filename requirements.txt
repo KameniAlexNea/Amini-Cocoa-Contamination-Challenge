@@ -21,3 +21,5 @@ faster-coco-eval
 
 datasets
 wandb
+
+ultralytics
