@@ -73,7 +73,8 @@ def train_model(args):
         copy_paste_mode=args.copy_paste_mode,
         auto_augment=args.auto_augment,
         half=args.half,
-        resume=args.resume
+        resume=args.resume,
+        project="zindi_challenge_cacao"
     )
     
     return model

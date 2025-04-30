@@ -15,14 +15,14 @@ def parse_args():
     parser.add_argument(
         "--data",
         type=str,
-        default="/data/home/eak/learning/nganga_ai/AminiCocoa/Amini-Cocoa-Contamination-Challenge/data.yaml",
+        default="/data/home/eak/learning/nganga_ai/AminiCocoa/Amini-Cocoa-Contamination-Challenge/dataset_subset/data_subset.yaml",
         help="Path to data configuration yaml file",
     )
     parser.add_argument(
         "--epochs", type=int, default=20, help="Number of epochs for each trial"
     )
     parser.add_argument(
-        "--iterations", type=int, default=20, help="Number of tuning iterations"
+        "--iterations", type=int, default=30, help="Number of tuning iterations"
     )
     parser.add_argument(
         "--resume", action="store_true", help="Resume previous tuning run"
@@ -98,8 +98,9 @@ def main():
         resume=args.resume,
         plots=True,
         save=True,
-        imgsz=1024,
+        imgsz=640,
         batch=16,
+        workers=4,
         device = list(range(torch.cuda.device_count())) if torch.cuda.is_available() else "cpu",
     )
 
