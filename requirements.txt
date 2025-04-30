@@ -23,3 +23,5 @@ datasets
 wandb
 
 ultralytics
+ray[tune]
+wandb
