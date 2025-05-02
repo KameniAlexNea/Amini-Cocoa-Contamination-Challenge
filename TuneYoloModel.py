@@ -1,16 +1,26 @@
+import os
+
+os.environ["WANDB_PROJECT"] = "zindi_challenge_cacao_tune"
+os.environ["WANDB_LOG_MODEL"] = "end"
+os.environ["WANDB_WATCH"] = "none"
+
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+
 import argparse
 import torch
+from ray.train import RunConfig # noqa
 from ultralytics import YOLO
 import yaml
-import os
 from ray import tune  # Add Ray Tune import
 
 print(os.getcwd())
 
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Tune YOLO model hyperparameters")
     parser.add_argument(
-        "--model", type=str, default="yolo11l.pt", help="Initial model to tune"
+        "--model", type=str, default="yolo11x.pt", help="Initial model to tune"
     )
     parser.add_argument(
         "--data",
@@ -19,16 +29,19 @@ def parse_args():
         help="Path to data configuration yaml file",
     )
     parser.add_argument(
-        "--epochs", type=int, default=20, help="Number of epochs for each trial"
+        "--epochs", type=int, default=12, help="Number of epochs for each trial"
     )
     parser.add_argument(
-        "--iterations", type=int, default=30, help="Number of tuning iterations"
+        "--iterations", type=int, default=150, help="Number of tuning iterations"
     )
     parser.add_argument(
         "--resume", action="store_true", help="Resume previous tuning run"
     )
     parser.add_argument(
         "--name", type=str, default="tuning_run", help="Name of the tuning run"
+    )
+    parser.add_argument(
+        "--batch_size", type=int, default=8, help="Batch size for tuning"
     )
     return parser.parse_args()
 
@@ -53,7 +66,7 @@ def main():
         # Loss function coefficients
         "box": tune.uniform(5.0, 20.0),  # Box loss gain
         "cls": tune.uniform(0.5, 4.0),  # Class loss gain
-        "dfl": tune.uniform(0.5, 2.0),  # DFL loss gain
+        "dfl": tune.uniform(0.5, 3.0),  # DFL loss gain
         # HSV augmentation
         "hsv_h": tune.uniform(0.0, 0.1),  # HSV hue augmentation
         "hsv_s": tune.uniform(0.0, 0.9),  # HSV saturation augmentation
@@ -71,13 +84,15 @@ def main():
         "mosaic": tune.uniform(0.0, 1.0),  # Mosaic augmentation probability
         "mixup": tune.loguniform(1e-5, 1.0),  # Mixup augmentation probability
         "copy_paste": tune.uniform(0.0, 0.5),  # Copy-paste augmentation probability
-        # Batch parameters
-        # "batch": tune.choice([8, 16, 32, 64]),  # Batch size
-        # Optimizer parameters
-        # "optimizer": tune.choice(["SGD", "Adam", "AdamW"]),  # Optimizer options
+        # IOU parameters
+        "iou": tune.uniform(0.4, 0.9),
+        "nms": tune.choice([True, False]),  # Non-maximum suppression
+        "agnostic_nms": tune.choice([True, False]),  # Agnostic NMS
+        "cos_lr": tune.choice([True, False]),  # Cosine learning rate scheduler
         # augmentation parameters
         "auto_augment": tune.choice(["randaugment", "autoaugment", "augmix"]),
         "copy_paste_mode": tune.choice(["mixup", "flip"]),
+        "dropout": tune.uniform(0.0, 0.5),  # Dropout rate
     }
 
     print(
@@ -97,22 +112,25 @@ def main():
         name=args.name,
         resume=args.resume,
         plots=True,
-        save=True,
+        save=False,
         imgsz=640,
-        batch=16,
+        batch=args.batch_size,
+        device="cuda", # list(range(torch.cuda.device_count())),
+        # gpu_per_trial=1,
         workers=4,
-        device = list(range(torch.cuda.device_count())) if torch.cuda.is_available() else "cpu",
+        # tune_args=tune_kwargs,
+        project="zindi_challenge_cacao_tune",
     )
 
     # Print best hyperparameters
     print("\nBest hyperparameters found:")
-    print(yaml.dump(results))
+    print(yaml.dump(results.get_best_result(scope="last-5-avg").config))
 
     # Save best hyperparameters to file
     output_dir = os.path.join("runs", "tune", args.name)
     os.makedirs(output_dir, exist_ok=True)
     with open(os.path.join(output_dir, "best_hyperparameters.yaml"), "w") as f:
-        yaml.dump(results, f)
+        yaml.dump(results.get_best_result().config, f)
 
     print(
         f"Best hyperparameters saved to {os.path.join(output_dir, 'best_hyperparameters.yaml')}"

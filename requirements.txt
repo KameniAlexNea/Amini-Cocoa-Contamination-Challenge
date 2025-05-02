@@ -24,4 +24,4 @@ wandb
 
 ultralytics
 ray[tune]
-wandb
+torch-tb-profiler
