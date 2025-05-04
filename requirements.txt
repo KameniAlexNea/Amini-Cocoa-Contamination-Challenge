@@ -25,3 +25,5 @@ wandb
 ultralytics
 ray[tune]
 torch-tb-profiler
+
+scikit-learn

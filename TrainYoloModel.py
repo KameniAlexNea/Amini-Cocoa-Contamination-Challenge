@@ -69,6 +69,7 @@ def train_model(args, project_name):
         logging.info(
             f"Running Stage 2: Multi-class head fine-tuning. Freezing first {args.freeze_layers} layers."
         )
+        additional_args["single_cls"] = False
         if args.classes is not None:
             additional_args["classes"] = [args.classes]
     else:
