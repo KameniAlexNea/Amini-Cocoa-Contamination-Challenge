@@ -59,6 +59,8 @@ def train_model(args):
         "device": device,
         "workers": args.workers if args.workers else args.batch_size // 2,
     }
+    if args.classes is not None:
+        additional_args["classes"] = [args.classes]
 
     print(f"Training with the following parameters:\n {additional_args}")
 
@@ -71,7 +73,7 @@ def train_model(args):
 def validate_model(model_path=None):
     """Validate the best model."""
     if model_path is None:
-        best_model = sorted(glob("runs/detect/train*/weights/best.pt"))[-1]
+        best_model = sorted(glob("zindi_challenge_cacao/train*/weights/best.pt"))[-1]
     else:
         best_model = model_path
 
@@ -172,6 +174,7 @@ def parse_args():
     parser.add_argument(
         "--half", action="store_true", default=False, help="Use half precision (FP16)"
     )
+    parser.add_argument("--classes", type=int, default=None, help="Train on single class")
 
     return parser.parse_args()
 
