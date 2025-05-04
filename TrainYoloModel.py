@@ -17,8 +17,8 @@ import torch
 from glob import glob
 
 
-def train_model(args):
-    """Train YOLO model with provided arguments."""
+def train_model(args, project_name):
+    """Train YOLO model with provided arguments for a specific stage."""
     # Load model
     model = YOLO(args.model)
 
@@ -59,34 +59,65 @@ def train_model(args):
         "device": device,
         "workers": args.workers if args.workers else args.batch_size // 2,
     }
-    if args.classes is not None:
-        additional_args["classes"] = [args.classes]
+
+    # Stage-specific arguments
+    if args.stage == 1:
+        additional_args["single_cls"] = True
+        logging.info("Running Stage 1: Single-class backbone training.")
+    elif args.stage == 2:
+        additional_args["freeze"] = args.freeze_layers
+        logging.info(
+            f"Running Stage 2: Multi-class head fine-tuning. Freezing first {args.freeze_layers} layers."
+        )
+        if args.classes is not None:
+            additional_args["classes"] = [args.classes]
+    else:
+        raise ValueError("Invalid stage specified.")
 
     print(f"Training with the following parameters:\n {additional_args}")
 
     # Train the model
-    model.train(**additional_args, resume=args.resume, project="zindi_challenge_cacao")
+    model.train(**additional_args, resume=args.resume, project=project_name)
 
     return model
 
 
-def validate_model(model_path=None):
-    """Validate the best model."""
+def validate_model(project_name, model_path=None):
+    """Validate the best model from a specific project/stage."""
     if model_path is None:
-        best_model = sorted(glob("zindi_challenge_cacao/train*/weights/best.pt"))[-1]
+        try:
+            # Find the latest training run within the project directory
+            latest_run_dir = sorted(glob(f"{project_name}/train*"))[-1]
+            best_model = os.path.join(latest_run_dir, "weights/best.pt")
+        except IndexError:
+            logging.error(f"Could not find training runs in project '{project_name}'.")
+            return None
     else:
         best_model = model_path
 
+    if not os.path.exists(best_model):
+        logging.error(f"Model path does not exist: {best_model}")
+        return None
+
     print(f"Validating model: {best_model}")
     model = YOLO(best_model)
-    results = model.val()
+    results = model.val(data=args.data_yaml)
     return results
 
 
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Train a YOLO model for object detection"
+        description="Train a YOLO model in two stages: backbone pretraining and head fine-tuning."
+    )
+
+    # Stage control
+    parser.add_argument(
+        "--stage",
+        type=int,
+        required=True,
+        choices=[1, 2],
+        help="Training stage: 1 for single-class backbone, 2 for multi-class head fine-tuning.",
     )
 
     # Dataset related
@@ -102,20 +133,13 @@ def parse_args():
 
     # Model related
     parser.add_argument(
-        "--model", type=str, default="yolo11l.pt", help="Path to model or model name"
-    )
-    parser.add_argument(
-        "--resume", action="store_true", help="Resume training from last checkpoint"
-    )
-    parser.add_argument(
-        "--validate_only",
-        action="store_true",
-        help="Only validate the best model without training",
-    )
-    parser.add_argument(
-        "--model_path",
+        "--model",
         type=str,
-        help="Specific model path to validate (used with --validate_only)",
+        required=True,
+        help="Path to model (e.g., yolov8l.pt for stage 1, stage1_best.pt for stage 2)",
+    )
+    parser.add_argument(
+        "--resume", action="store_true", help="Resume training from last checkpoint in the stage's project"
     )
 
     # Training parameters
@@ -137,6 +161,12 @@ def parse_args():
     parser.add_argument(
         "--workers", type=int, help="Number of worker threads for dataloader"
     )
+    parser.add_argument(
+        "--freeze_layers",
+        type=int,
+        default=10,
+        help="Number of layers to freeze (from start) during stage 2 fine-tuning.",
+    )
 
     # Augmentation and training options
     parser.add_argument(
@@ -150,9 +180,9 @@ def parse_args():
         "--mixup", type=float, default=0.2, help="Mixup alpha for augmentation"
     )
     parser.add_argument(
-        "--max_det", type=int, default=150, help="Maximum detections per image"
+        "--max_det", type=int, default=30, help="Maximum detections per image"
     )
-    parser.add_argument("--nms", action="store_true", default=True, help="Use NMS")
+    parser.add_argument("--nms", action="store_true", default=False, help="Use NMS")
     parser.add_argument(
         "--flipud", type=float, default=0.3, help="Probability of flipping up-down"
     )
@@ -187,21 +217,34 @@ def main():
     )
 
     # Parse arguments
+    global args
     args = parse_args()
 
-    # If only validating
-    if args.validate_only:
-        results = validate_model(args.model_path)
-        logging.info(f"Validation results: {results}")
+    # Define project name based on stage
+    project_base_name = "zindi_challenge_cacao"
+    project_name = f"{project_base_name}_stage{args.stage}"
+    os.environ["WANDB_PROJECT"] = project_name
+
+    # Validate arguments based on stage
+    if args.stage == 2 and not args.model.endswith(".pt"):
+        logging.error("For stage 2, --model must be a path to a checkpoint file (e.g., best.pt from stage 1).")
         return
+    if args.stage == 1 and args.model.endswith(".pt") and not args.resume:
+        logging.warning(f"Starting stage 1 from a .pt file ({args.model}) without --resume. This will restart training using its weights.")
+    elif args.stage == 1 and not args.model.endswith(".pt"):
+        logging.info(f"Starting stage 1 training from base model: {args.model}")
 
-    # Train model
-    logging.info(f"Starting training with model: {args.model}")
-    model = train_model(args)
+    # Train model for the specified stage
+    logging.info(f"Starting training stage {args.stage} with model: {args.model}")
+    model = train_model(args, project_name)
 
-    # Validate best model
-    results = validate_model()
-    logging.info(f"Validation results: {results}")
+    # Validate best model from the current stage
+    logging.info(f"Validating best model from stage {args.stage}...")
+    results = validate_model(project_name)
+    if results:
+        logging.info(f"Validation results for stage {args.stage}: {results.maps}")
+    else:
+        logging.error(f"Validation failed for stage {args.stage}.")
 
 
 if __name__ == "__main__":
