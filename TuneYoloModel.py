@@ -1,6 +1,6 @@
 import os
-
-os.environ["WANDB_PROJECT"] = "zindi_challenge_cacao_tune"
+tune_name = "zindi_challenge_cacao_tune_last"
+os.environ["WANDB_PROJECT"] = tune_name
 os.environ["WANDB_LOG_MODEL"] = "end"
 os.environ["WANDB_WATCH"] = "none"
 
@@ -13,7 +13,22 @@ from ray.train import RunConfig # noqa
 from ultralytics import YOLO
 import yaml
 from ray import tune  # Add Ray Tune import
+import random
+import numpy as np
 
+
+def set_seed(seed):
+    """Set the seed for random number generation."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    if torch.backends.cudnn.is_available():
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+set_seed(42)
 print(os.getcwd())
 
 
@@ -29,10 +44,10 @@ def parse_args():
         help="Path to data configuration yaml file",
     )
     parser.add_argument(
-        "--epochs", type=int, default=12, help="Number of epochs for each trial"
+        "--epochs", type=int, default=20, help="Number of epochs for each trial"
     )
     parser.add_argument(
-        "--iterations", type=int, default=150, help="Number of tuning iterations"
+        "--iterations", type=int, default=20, help="Number of tuning iterations"
     )
     parser.add_argument(
         "--resume", action="store_true", help="Resume previous tuning run"
@@ -55,14 +70,14 @@ def main():
     # Define hyperparameter search space with proper Ray Tune format
     search_space = {
         # Learning rate parameters
-        "lr0": tune.loguniform(1e-5, 5e-2),  # Initial learning rate
-        "lrf": tune.loguniform(0.001, 0.1),  # Final learning rate factor
+        # "lr0": tune.loguniform(1e-5, 5e-2),  # Initial learning rate
+        # "lrf": tune.loguniform(0.001, 0.1),  # Final learning rate factor
         # Optimizer parameters
-        "momentum": tune.uniform(0.6, 0.99),  # SGD momentum/Adam beta1
-        "weight_decay": tune.loguniform(1e-8, 0.001),  # Optimizer weight decay
+        # "momentum": tune.uniform(0.6, 0.99),  # SGD momentum/Adam beta1
+        # "weight_decay": tune.loguniform(1e-8, 0.001),  # Optimizer weight decay
         # Warmup parameters
-        "warmup_epochs": tune.uniform(0.0, 5.0),  # Warmup epochs
-        "warmup_momentum": tune.uniform(0.0, 0.95),  # Warmup momentum
+        # "warmup_epochs": tune.uniform(0.0, 5.0),  # Warmup epochs
+        # "warmup_momentum": tune.uniform(0.0, 0.95),  # Warmup momentum
         # Loss function coefficients
         "box": tune.uniform(5.0, 20.0),  # Box loss gain
         "cls": tune.uniform(0.5, 4.0),  # Class loss gain
@@ -78,21 +93,23 @@ def main():
         "shear": tune.uniform(0.0, 10.0),  # Image shear (+/- deg)
         "perspective": tune.uniform(0.0, 0.001),  # Image perspective (+/- fraction)
         # Flip augmentations
-        "flipud": tune.uniform(0.0, 0.5),  # Flip up-down probability
-        "fliplr": tune.uniform(0.0, 0.5),  # Flip left-right probability
+        "flipud": tune.uniform(0.0, 0.2),  # Flip up-down probability
+        "fliplr": tune.uniform(0.0, 0.2),  # Flip left-right probability
         # Mosaic and mix augmentations
         "mosaic": tune.uniform(0.0, 1.0),  # Mosaic augmentation probability
         "mixup": tune.loguniform(1e-5, 1.0),  # Mixup augmentation probability
-        "copy_paste": tune.uniform(0.0, 0.5),  # Copy-paste augmentation probability
+        "copy_paste": tune.loguniform(1e-5, 0.2),  # Copy-paste augmentation probability
         # IOU parameters
         "iou": tune.uniform(0.4, 0.9),
-        "nms": tune.choice([True, False]),  # Non-maximum suppression
-        "agnostic_nms": tune.choice([True, False]),  # Agnostic NMS
-        "cos_lr": tune.choice([True, False]),  # Cosine learning rate scheduler
+        "nms": tune.choice([True]),  # Non-maximum suppression , False
+        "agnostic_nms": tune.choice([True]),  # Agnostic NMS , False
+        "cos_lr": tune.choice([True]),  # Cosine learning rate scheduler , False
         # augmentation parameters
-        "auto_augment": tune.choice(["randaugment", "autoaugment", "augmix"]),
-        "copy_paste_mode": tune.choice(["mixup", "flip"]),
-        "dropout": tune.uniform(0.0, 0.5),  # Dropout rate
+        "auto_augment": tune.choice(["augmix"]), # "randaugment", "autoaugment", 
+        "copy_paste_mode": tune.choice(["mixup"]), # , "flip"
+        "amp": tune.choice([True]),
+        "half": tune.choice([True]),
+        "dropout": tune.uniform(0.0, 0.4),  # Dropout rate
     }
 
     print(
@@ -113,24 +130,25 @@ def main():
         resume=args.resume,
         plots=True,
         save=False,
-        imgsz=640,
+        imgsz=1024,
         batch=args.batch_size,
-        device="cuda", # list(range(torch.cuda.device_count())),
-        # gpu_per_trial=1,
+        device="cuda:0", # list(range(torch.cuda.device_count())),
+        gpu_per_trial=1,
         workers=4,
         # tune_args=tune_kwargs,
-        project="zindi_challenge_cacao_tune",
+        project=tune_name,
+        seed=42,
     )
 
     # Print best hyperparameters
     print("\nBest hyperparameters found:")
-    print(yaml.dump(results.get_best_result(scope="last-5-avg").config))
+    print(yaml.dump(results))
 
     # Save best hyperparameters to file
     output_dir = os.path.join("runs", "tune", args.name)
     os.makedirs(output_dir, exist_ok=True)
     with open(os.path.join(output_dir, "best_hyperparameters.yaml"), "w") as f:
-        yaml.dump(results.get_best_result().config, f)
+        yaml.dump(results, f)
 
     print(
         f"Best hyperparameters saved to {os.path.join(output_dir, 'best_hyperparameters.yaml')}"

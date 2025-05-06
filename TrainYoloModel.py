@@ -1,14 +1,14 @@
 # Import libraries
 import json
+import yaml
 import os
 
 os.environ["WANDB_PROJECT"] = "zindi_challenge_cacao"
 os.environ["WANDB_LOG_MODEL"] = "end"
 os.environ["WANDB_WATCH"] = "none"
 
-import wandb
-
-wandb.login(key=os.environ["WANDB_API_KEY"], host="https://api.wandb.ai")
+# import wandb
+# wandb.login(key=os.environ["WANDB_API_KEY"], host="https://api.wandb.ai")
 
 import logging
 import argparse
@@ -34,14 +34,17 @@ def train_model(args, project_name):
 
     config = {}
     if args.config:
-        config: dict = json.load(open(args.config, "r"))
+        config: dict = (
+            json.load(open(args.config, "r"))
+            if args.config.endswith(".json")
+            else yaml.safe_load(open(args.config, "r"))
+        )
         config.pop("data", None)
 
     additional_args = {
         "multi_scale": args.multi_scale,
         "dropout": args.dropout,
         "mixup": args.mixup,
-        "max_det": args.max_det,
         "nms": args.nms,
         "flipud": args.flipud,
         "cls": args.cls_loss,
@@ -57,7 +60,11 @@ def train_model(args, project_name):
         "batch": args.batch_size,
         "patience": args.patience,
         "device": device,
+        "max_det": args.max_det,
         "workers": args.workers if args.workers else args.batch_size // 2,
+        # "cache": True,
+        # "deterministic": False,
+        "time": 6,
     }
 
     # Stage-specific arguments
@@ -65,7 +72,8 @@ def train_model(args, project_name):
         additional_args["single_cls"] = True
         logging.info("Running Stage 1: Single-class backbone training.")
     elif args.stage == 2:
-        additional_args["freeze"] = args.freeze_layers
+        if args.freeze_layers is not None:
+            additional_args["freeze"] = args.freeze_layers
         logging.info(
             f"Running Stage 2: Multi-class head fine-tuning. Freezing first {args.freeze_layers} layers."
         )
@@ -75,15 +83,20 @@ def train_model(args, project_name):
     else:
         raise ValueError("Invalid stage specified.")
 
-    print(f"Training with the following parameters:\n {additional_args}")
+    print(
+        f"Training with the following parameters:\n {json.dumps(additional_args, indent=2)}"
+    )
+
+    additional_args["project"] = project_name
+    additional_args["resume"] = args.resume
 
     # Train the model
-    model.train(**additional_args, resume=args.resume, project=project_name)
+    model.train(**additional_args)
 
     return model
 
 
-def validate_model(project_name, model_path=None):
+def validate_model(args, project_name, model_path=None):
     """Validate the best model from a specific project/stage."""
     if model_path is None:
         try:
@@ -140,7 +153,9 @@ def parse_args():
         help="Path to model (e.g., yolov8l.pt for stage 1, stage1_best.pt for stage 2)",
     )
     parser.add_argument(
-        "--resume", action="store_true", help="Resume training from last checkpoint in the stage's project"
+        "--resume",
+        action="store_true",
+        help="Resume training from last checkpoint in the stage's project",
     )
 
     # Training parameters
@@ -165,7 +180,7 @@ def parse_args():
     parser.add_argument(
         "--freeze_layers",
         type=int,
-        default=10,
+        default=None,
         help="Number of layers to freeze (from start) during stage 2 fine-tuning.",
     )
 
@@ -173,7 +188,7 @@ def parse_args():
     parser.add_argument(
         "--multi_scale",
         action="store_true",
-        default=True,
+        default=False,
         help="Use multi-scale training",
     )
     parser.add_argument("--dropout", type=float, default=0.3, help="Dropout rate")
@@ -205,43 +220,35 @@ def parse_args():
     parser.add_argument(
         "--half", action="store_true", default=False, help="Use half precision (FP16)"
     )
-    parser.add_argument("--classes", type=int, default=None, help="Train on single class")
+    parser.add_argument(
+        "--classes", type=int, default=None, help="Train on single class"
+    )
 
     return parser.parse_args()
 
 
-def main():
+def main(args):
     """Main function to run the training process."""
     # Set up logging
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
     )
 
-    # Parse arguments
-    global args
-    args = parse_args()
-
     # Define project name based on stage
     project_base_name = "zindi_challenge_cacao"
     project_name = f"{project_base_name}_stage{args.stage}"
     os.environ["WANDB_PROJECT"] = project_name
 
-    # Validate arguments based on stage
-    if args.stage == 2 and not args.model.endswith(".pt"):
-        logging.error("For stage 2, --model must be a path to a checkpoint file (e.g., best.pt from stage 1).")
-        return
-    if args.stage == 1 and args.model.endswith(".pt") and not args.resume:
-        logging.warning(f"Starting stage 1 from a .pt file ({args.model}) without --resume. This will restart training using its weights.")
-    elif args.stage == 1 and not args.model.endswith(".pt"):
+    if args.stage == 1 and not args.model.endswith(".pt"):
         logging.info(f"Starting stage 1 training from base model: {args.model}")
 
     # Train model for the specified stage
     logging.info(f"Starting training stage {args.stage} with model: {args.model}")
-    model = train_model(args, project_name)
+    train_model(args, project_name)
 
     # Validate best model from the current stage
     logging.info(f"Validating best model from stage {args.stage}...")
-    results = validate_model(project_name)
+    results = validate_model(args, project_name)
     if results:
         logging.info(f"Validation results for stage {args.stage}: {results.maps}")
     else:
@@ -249,4 +256,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # Parse arguments
+    args = parse_args()
+    main(args)
