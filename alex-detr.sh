@@ -1,14 +1,15 @@
-nohup python object-detection-detr/train.py \
+nohup uv run python object-detection-detr/train.py \
     --cls_thr 0.1 \
+    --model_name ustc-community/dfine-medium-coco \
     --num_class 3 \
     --validation_csv "dataset/full_valid.json" \
     --image_folder "." \
     --training_csv "dataset/full_train.json" \
     --output_dir logs \
-    --run_name cond-detr-50 \
+    --run_name dfine-medium-coco \
     --auto_find_batch_size \
-    --per_device_train_batch_size 16 \
-    --per_device_eval_batch_size 16 \
+    --per_device_train_batch_size 24 \
+    --per_device_eval_batch_size 24 \
     --num_train_epochs 200 \
     --do_eval \
     --do_train \
@@ -20,6 +21,7 @@ nohup python object-detection-detr/train.py \
     --push_to_hub false \
     --eval_strategy epoch \
     --save_strategy epoch \
+    --logging_steps 0.5 \
     --report_to wandb \
     --optim adamw_torch \
     --lr_scheduler_type cosine \
