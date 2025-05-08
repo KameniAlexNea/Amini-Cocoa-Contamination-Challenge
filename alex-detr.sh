@@ -2,7 +2,7 @@ nohup uv run python object-detection-detr/train.py \
     --cls_thr 0.1 \
     --model_name ustc-community/dfine-medium-coco \
     --num_class 3 \
-    --label_names "class_A" "class_B" "class_C" \
+    --names "anthracnose" "cssvd" "healthy" \
     --validation_csv "dataset/full_valid.json" \
     --image_folder "." \
     --training_csv "dataset/full_train.json" \
@@ -14,15 +14,15 @@ nohup uv run python object-detection-detr/train.py \
     --num_train_epochs 200 \
     --do_eval \
     --do_train \
-    --fp16 \
-    --learning_rate 1e-4 \
-    --weight_decay 1e-5 \
-    --save_total_limit 2 \
+    --learning_rate 5e-6 \
+    --weight_decay 2e-5 \
+    --save_total_limit 3 \
     --remove_unused_columns false \
     --push_to_hub false \
     --eval_strategy epoch \
     --save_strategy epoch \
     --logging_steps 0.5 \
+    --logging_strategy epoch \
     --report_to wandb \
     --optim adamw_torch \
     --lr_scheduler_type cosine \
