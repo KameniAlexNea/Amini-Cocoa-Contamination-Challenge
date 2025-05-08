@@ -12,7 +12,8 @@ os.environ["WANDB_WATCH"] = "none"
 
 import logging
 import argparse
-from ultralytics import YOLO
+import yolo_balancing  # noqa: F401
+from ultralytics import YOLO, YOLOE
 import torch
 from glob import glob
 
@@ -20,7 +21,7 @@ from glob import glob
 def train_model(args, project_name):
     """Train YOLO model with provided arguments for a specific stage."""
     # Load model
-    model = YOLO(args.model)
+    model = (YOLO if "yoloe" not in args.model else YOLOE)(args.model)
 
     # Configure device
     if args.device == "auto":
@@ -64,7 +65,7 @@ def train_model(args, project_name):
         "workers": args.workers if args.workers else args.batch_size // 2,
         # "cache": True,
         # "deterministic": False,
-        "time": 6,
+        "time": 4,
     }
 
     # Stage-specific arguments
