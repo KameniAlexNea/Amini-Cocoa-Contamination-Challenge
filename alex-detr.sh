@@ -2,6 +2,7 @@ nohup uv run python object-detection-detr/train.py \
     --cls_thr 0.1 \
     --model_name ustc-community/dfine-medium-coco \
     --num_class 3 \
+    --label_names "class_A" "class_B" "class_C" \
     --validation_csv "dataset/full_valid.json" \
     --image_folder "." \
     --training_csv "dataset/full_train.json" \
