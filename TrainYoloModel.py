@@ -41,6 +41,7 @@ def train_model(args, project_name):
             else yaml.safe_load(open(args.config, "r"))
         )
         config.pop("data", None)
+        config.pop("model", None)
 
     additional_args = {
         "multi_scale": args.multi_scale,
@@ -53,8 +54,9 @@ def train_model(args, project_name):
         "copy_paste": args.copy_paste,
         "copy_paste_mode": args.copy_paste_mode,
         "auto_augment": args.auto_augment,
-        "half": args.half,
         **config,
+        "half": args.half,
+        "iou": args.iou,
         "data": args.data_yaml,
         "epochs": args.epochs,
         "imgsz": args.img_size,
@@ -64,8 +66,8 @@ def train_model(args, project_name):
         "max_det": args.max_det,
         "workers": args.workers if args.workers else args.batch_size // 2,
         # "cache": True,
-        # "deterministic": False,
-        "time": 4,
+        "deterministic": False, # Set to True for reproducibility
+        "time": 4.5, # I have a smaller GPU, so 4.5 is okay
     }
 
     # Stage-specific arguments
@@ -193,11 +195,12 @@ def parse_args():
         help="Use multi-scale training",
     )
     parser.add_argument("--dropout", type=float, default=0.3, help="Dropout rate")
+    parser.add_argument("--iou", type=float, default=0.6, help="IOU threshold for NMS")
     parser.add_argument(
         "--mixup", type=float, default=0.2, help="Mixup alpha for augmentation"
     )
     parser.add_argument(
-        "--max_det", type=int, default=30, help="Maximum detections per image"
+        "--max_det", type=int, default=300, help="Maximum detections per image"
     )
     parser.add_argument("--nms", action="store_true", default=False, help="Use NMS")
     parser.add_argument(
